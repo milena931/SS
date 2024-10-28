@@ -1,0 +1,469 @@
+%{
+  #include "inc/asembler/pomocneStrukture.hpp"
+  #include <cstdio>
+  #include <iostream>
+  #include <vector>
+  
+ 
+  using namespace std;
+
+  extern int yylex();
+  extern int yyparse();
+  extern void yylex_destroy();
+  extern FILE *yyin;
+  extern int linije;
+
+  void yyerror(vector<Linija>& kontekst, const char* s);
+%}
+
+%code requires{
+  #include "inc/asembler/pomocneStrukture.hpp"
+  #include <iostream>
+  #include <vector>
+ 
+  using namespace std;
+
+}
+
+%union {
+  char* labela;
+  char* str;
+  int registar;
+  int broj;
+  Simboli simboli;
+  char* simbol;
+  Operand operand;
+  Direktiva direktiva;
+  Instrukcija instrukcija;
+}
+
+%token <instrukcija> HALT
+%token <instrukcija> INT
+%token <instrukcija> IRET
+%token <instrukcija> CALL
+%token <instrukcija> RET
+%token <instrukcija> JMP
+%token <instrukcija> BEQ
+%token <instrukcija> BNE
+%token <instrukcija> BGT
+%token <instrukcija> PUSH
+%token <instrukcija> POP
+%token <instrukcija> XCHG
+%token <instrukcija> ADD
+%token <instrukcija> SUB
+%token <instrukcija> MUL
+%token <instrukcija> DIV
+%token <instrukcija> NOT
+%token <instrukcija> AND
+%token <instrukcija> OR
+%token <instrukcija> XOR
+%token <instrukcija> SHL
+%token <instrukcija> SHR
+%token <instrukcija> LD
+%token <instrukcija> ST
+%token <instrukcija> CSRRD
+%token <instrukcija> CSRWR
+%token <direktiva> GLOBAL
+%token <direktiva> EXTERN
+%token <direktiva> SECTION
+%token <direktiva> WORD
+%token <direktiva> SKIP
+%token <direktiva> ASCII
+%token <direktiva> END
+%token PLUS
+%token MINUS
+%token PUTA
+%token POSTO
+%token DOLAR
+%token LEVA_ZAGRADA
+%token DESNA_ZAGRADA
+%token LEVA_UGLASTA
+%token DESNA_UGLASTA
+%token ZAREZ
+%token KRAJ_LINIJE
+%token <labela> LABELA
+%token REGISTAR
+%token SIMBOL
+%token <broj> BROJ
+%token KOMENTAR
+%token <str> STRING
+
+%type <instrukcija> instrukcija
+%type <direktiva> direktiva
+%type <operand> operand
+%type <simboli> simboli
+%type <simbol> SIMBOL
+%type <registar> REGISTAR
+
+%parse-param { std::vector<Linija>& kontekst }
+
+%%
+linije: linije linija | linija;
+
+linija:
+      LABELA KRAJ_LINIJE { 
+        Linija linija;
+        linija.vrsta = PRAZNA;
+        linija.labela = $1;
+        linija.lab = true;
+        kontekst.push_back(linija);
+       }
+    | LABELA instrukcija KRAJ_LINIJE { 
+      Linija linija;
+      linija.vrsta = INSTRUKCIJA;
+      linija.labela = $1;
+      linija.lab = true;
+      linija.instrukcija = $2;
+      kontekst.push_back(linija);
+      //treba da dodam informacije za instrukciju
+    }
+    | LABELA instrukcija KOMENTAR KRAJ_LINIJE { 
+      Linija linija;
+      linija.vrsta = INSTRUKCIJA;
+      linija.labela = $1;
+      linija.lab = true;
+      linija.instrukcija = $2;
+      kontekst.push_back(linija);
+      //treba da dodam informacije za instrukciju
+    }
+    | LABELA direktiva KRAJ_LINIJE { 
+      Linija linija;
+      linija.vrsta = DIREKTIVA;
+      linija.labela = $1;
+      linija.lab = true;
+      linija.direktiva = $2;
+      kontekst.push_back(linija); //treba da dodam informacije za direktivu 
+    }
+    | LABELA direktiva KOMENTAR KRAJ_LINIJE { 
+      Linija linija;
+      linija.vrsta = DIREKTIVA;
+      linija.labela = $1;
+      linija.lab = true;
+      linija.direktiva = $2;
+      kontekst.push_back(linija); //treba da dodam informacije za direktivu 
+    }
+    | instrukcija KRAJ_LINIJE { 
+      Linija linija;
+      linija.vrsta = INSTRUKCIJA;
+      linija.instrukcija = $1;
+      linija.labela = nullptr;
+      linija.lab = false;
+      kontekst.push_back(linija);  //treba da dodam informacije za instrukciju
+    }
+    | instrukcija KOMENTAR KRAJ_LINIJE { 
+      Linija linija;
+      linija.vrsta = INSTRUKCIJA;
+      linija.instrukcija = $1;
+      linija.labela = nullptr;
+      linija.lab = false;
+      kontekst.push_back(linija);  //treba da dodam informacije za instrukciju
+    }
+    | direktiva KRAJ_LINIJE {
+      Linija linija;
+      linija.vrsta = DIREKTIVA;
+      linija.labela = nullptr;
+      linija.lab = false;
+      linija.direktiva = $1;
+      kontekst.push_back(linija);
+    }
+    | direktiva KOMENTAR KRAJ_LINIJE {
+      Linija linija;
+      linija.vrsta = DIREKTIVA;
+      linija.labela = nullptr;
+      linija.lab = false;
+      linija.direktiva = $1;
+      kontekst.push_back(linija);
+    }
+    | KOMENTAR KRAJ_LINIJE { 
+      Linija linija;
+      linija.vrsta = PRAZNA;
+      linija.labela = nullptr;
+      linija.lab = false;
+      kontekst.push_back(linija);
+    }
+    | KRAJ_LINIJE { 
+      Linija linija;
+      linija.vrsta = PRAZNA;
+      linija.labela = nullptr;
+      linija.lab = false;
+      kontekst.push_back(linija);
+    }
+    ;
+
+direktiva:
+      GLOBAL simboli {
+          $$.vrsta = DIREKTIVA_GLOBAL;
+          $$.simboli = $2;    //treba jos dodati simbole
+        
+      }
+    | EXTERN simboli {
+          $$.vrsta = DIREKTIVA_EXTERN;
+          $$.simboli = $2;    //treba jos dodati simbole
+        
+     }
+    | SECTION SIMBOL { 
+          $$.vrsta = DIREKTIVA_SECTION;
+          $$.simbol = $2;    //treba jos dodati simbol
+        
+     }
+    | WORD simboli {
+          $$.vrsta = DIREKTIVA_WORD;
+          $$.simboli = $2;    //treba jos dodati simbole
+        
+     }
+    | SKIP BROJ { 
+          $$.vrsta = DIREKTIVA_SKIP;
+          $$.broj = $2;         //posto je skip samo dodamo broj i to je to
+     }
+    | ASCII STRING { 
+          $$.vrsta = DIREKTIVA_ASCII;
+          $$.ascii_string = $2;       //posto je ascii samo se string doda
+        
+     }
+    | END { 
+          $$.vrsta = DIREKTIVA_END;     //posto je samo end ne treba nista vise
+     }
+    ;
+
+instrukcija:
+      HALT { 
+          $$.instrukcija = INSTRUKCIJA_HALT;
+        
+      }
+    | INT { 
+          $$.instrukcija = INSTRUKCIJA_INT;
+      
+     }
+    | IRET { 
+        $$.instrukcija = INSTRUKCIJA_IRET;
+      
+     }
+    | CALL operand {
+        $$.instrukcija = INSTRUKCIJA_CALL;
+        $$.operand = $2;  //treba operand da se doda
+      
+    }
+    | RET {
+        $$.instrukcija = INSTRUKCIJA_RET;
+      
+    }
+    | JMP operand {
+        $$.instrukcija = INSTRUKCIJA_JMP;
+        $$.operand = $2;  //treba operand da se doda
+      
+    }
+    | BEQ POSTO REGISTAR ZAREZ POSTO REGISTAR ZAREZ operand {
+        $$.instrukcija = INSTRUKCIJA_BEQ;
+        $$.regA = $3;
+        $$.regB = $6;
+        $$.operand = $8;  //treba operand da se doda
+      
+    }
+    | BNE POSTO REGISTAR ZAREZ POSTO REGISTAR ZAREZ operand {
+        $$.instrukcija = INSTRUKCIJA_BNE;
+        $$.regA = $3;
+        $$.regB = $6;
+        $$.operand = $8;  //treba operand da se doda
+      
+    }
+    | BGT POSTO REGISTAR ZAREZ POSTO REGISTAR ZAREZ operand {
+        $$.instrukcija = INSTRUKCIJA_BGT;
+        $$.regA = $3;
+        $$.regB = $6;
+        $$.operand = $8;  //treba operand da se doda
+      
+    }
+    | PUSH POSTO REGISTAR{
+        $$.instrukcija = INSTRUKCIJA_PUSH;
+        $$.regA = $3;
+      
+    }
+    | POP POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_POP;
+        $$.regA = $3;
+      
+    }
+    | XCHG POSTO REGISTAR ZAREZ  POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_XCHG;
+        $$.regA = $3;
+        $$.regB = $6;
+      
+    }
+    | ADD POSTO REGISTAR ZAREZ POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_ADD;
+        $$.regA = $3;
+        $$.regB = $6;
+      
+    }
+    | SUB POSTO REGISTAR ZAREZ POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_SUB;
+        $$.regA = $3;
+        $$.regB = $6;
+    }
+    | MUL POSTO REGISTAR ZAREZ POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_MUL;
+        $$.regA = $3;
+        $$.regB = $6;
+      
+    }
+    | DIV POSTO REGISTAR ZAREZ POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_DIV;
+        $$.regA = $3;
+        $$.regB = $6;
+      
+    }
+    | NOT POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_NOT;
+        $$.regA = $3;
+      
+    }
+    | AND POSTO REGISTAR ZAREZ POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_AND;
+        $$.regA = $3;
+        $$.regB = $6;
+      
+    }
+    | OR POSTO REGISTAR ZAREZ POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_OR;
+        $$.regA = $3;
+        $$.regB = $6;
+    }
+    | XOR POSTO REGISTAR ZAREZ POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_XOR;
+        $$.regA = $3;
+        $$.regB = $6;
+    }
+    | SHL POSTO REGISTAR ZAREZ POSTO REGISTAR {
+      $$.instrukcija = INSTRUKCIJA_SHL;
+        $$.regA = $3;
+        $$.regB = $6;
+    }
+    | SHR POSTO REGISTAR ZAREZ POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_SHR;
+        $$.regA = $3;
+        $$.regB = $6;
+    }
+    | LD operand ZAREZ POSTO REGISTAR {
+        $$.instrukcija = INSTRUKCIJA_LD;
+        $$.operand = $2;   //operandi treba da se dodaju
+        $$.regA = $5;
+    }
+    | ST POSTO REGISTAR ZAREZ operand {
+        $$.instrukcija = INSTRUKCIJA_ST;
+        $$.regA = $3;   //operandi treba da se dodaju
+        $$.operand = $5;
+    }
+    | CSRRD POSTO SIMBOL ZAREZ POSTO REGISTAR {
+      $$.instrukcija = INSTRUKCIJA_CSRRD;
+      $$.regA = $6;
+      $$.simbol = $3;
+    }
+    | CSRWR POSTO REGISTAR ZAREZ POSTO SIMBOL {
+      $$.instrukcija = INSTRUKCIJA_CSRWR;
+      $$.regA = $3;
+      $$.simbol = $6;
+    }
+    ;
+
+operand:
+    DOLAR BROJ { 
+          $$.adresiranje = IMMED;
+          $$.simbol.vrsta = LITERAL_VRSTA;
+          $$.simbol.literal = $2;
+        
+      }
+    | DOLAR SIMBOL {
+          $$.adresiranje = IMMED;
+          $$.simbol.vrsta = SIMBOL_VRSTA;
+          $$.simbol.simbol = $2;
+        
+      }
+    | BROJ { 
+          $$.adresiranje = MEMDIR;
+          $$.simbol.vrsta = LITERAL_VRSTA;
+          $$.simbol.literal = $1;
+        
+      }
+    | SIMBOL {
+          $$.adresiranje = MEMDIR;
+          $$.simbol.vrsta = SIMBOL_VRSTA;
+          $$.simbol.simbol = $1;
+        
+      }
+    | POSTO REGISTAR { 
+          $$.adresiranje = REGDIR;
+          $$.reg = $2;
+        
+      }
+    | LEVA_UGLASTA POSTO REGISTAR DESNA_UGLASTA { 
+          $$.adresiranje = REGIND;
+          $$.reg = $3;
+        
+      }
+    | LEVA_UGLASTA POSTO REGISTAR PLUS BROJ DESNA_UGLASTA { //dodaj pomeraj ovde si to zaboravila
+          $$.adresiranje = REGINDPOM;
+          $$.reg = $3;
+          $$.simbol.vrsta = LITERAL_VRSTA;
+          $$.simbol.literal = $5;
+      }
+    | LEVA_UGLASTA POSTO REGISTAR PLUS SIMBOL DESNA_UGLASTA { 
+          $$.adresiranje = REGINDPOM;
+          $$.reg = $3;
+          $$.simbol.vrsta = SIMBOL_VRSTA;
+          $$.simbol.simbol = $5;
+      }
+    ;
+simboli:
+    simboli ZAREZ SIMBOL{
+          $$.duzina = $1.duzina + 1;
+          $$.simboli = (Simbol*)realloc($1.simboli, $$.duzina * sizeof(Simbol));
+          if ($$.simboli == NULL) {
+              free($1.simboli);
+          } else {
+              $$.simboli[$$.duzina - 1].vrsta = SIMBOL_VRSTA;
+              $$.simboli[$$.duzina - 1].simbol = $3;
+              $$.simboli[$$.duzina - 1].literal = 0;
+          }
+    }
+    | simboli ZAREZ BROJ{
+          $$.duzina = $1.duzina + 1;
+          $$.simboli = (Simbol*)realloc($1.simboli, $$.duzina * sizeof(Simbol));
+          if ($$.simboli == NULL) {
+              free($1.simboli);
+          } else {
+              $$.simboli[$$.duzina - 1].vrsta = LITERAL_VRSTA;
+              $$.simboli[$$.duzina - 1].literal = $3;
+          }
+    }
+    | SIMBOL {   //ako je samo jedan simbol   ---> ovo je deo direktive pa mora u direktivu da se stavi
+
+          $$.duzina = 1;
+          $$.simboli = (Simbol*)malloc(1 * sizeof(Simbol));
+          if ($$.simboli == NULL) {
+          } else {
+              $$.simboli[0].vrsta = SIMBOL_VRSTA;
+              $$.simboli[0].simbol = $1;
+              $$.simboli[$$.duzina - 1].literal = 0;
+          }
+
+      }
+    | BROJ{
+          $$.duzina = 1;
+          $$.simboli = (Simbol*)malloc(sizeof(Simbol));
+          if ($$.simboli == NULL) {
+
+          } else {
+              $$.simboli[0].vrsta = LITERAL_VRSTA;
+              $$.simboli[0].literal = $1;
+          }
+    }
+    ;
+
+
+%%
+
+void yyerror(std::vector<Linija>& kontekst, const char* s) {
+  kontekst.clear();
+  cout << "Greska pri parsiranju: " << s << endl;
+  exit(-1);
+}
